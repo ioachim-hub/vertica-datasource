@@ -6,10 +6,34 @@ This plugin is a backend data source plugin.
 
 ## Using the plugin
 
-### Installation
+### Maintained fork installation (recommended)
+
+The maintained `v2.0.9` archive is intentionally unsigned and is for internal
+deployment. Download `rajsameer-vertica-datasource-2.0.9.zip` and its `.sha256`
+file from this fork's `v2.0.9` GitHub release. Verify the checksum from the
+download directory, then extract the ZIP into Grafana's plugin directory. In
+Grafana's configuration, allow this exact plugin ID:
+
+```ini
+[plugins]
+allow_loading_unsigned_plugins = rajsameer-vertica-datasource
+```
+
+Restart Grafana after installing or replacing the plugin. Unsigned loading is a
+Grafana administrator decision; this repository does not claim a live Grafana
+or Vertica smoke test has been run.
+
+### Upstream Grafana catalog installation
+
+The Grafana CLI command installs the upstream/catalog distribution. It does not
+install the maintained unsigned artifact built by this fork:
+
 ```bash
 grafana-cli plugins install rajsameer-vertica-datasource
 ```
+
+Use the catalog command only when the upstream distribution is intended.
+
 ### Creating data source connection
 1. Add Data source.
 ![](src/img/vertica-ds-conf.png)
@@ -122,55 +146,36 @@ Two modes are **static** , **null** and **previous**.
 ## SQL syntax highlighting (new) (beta)
 SQL syntax highlighting added using CodeMirror library. In future would add auto complete and formatting.
 
-## Debugging
-
-You can debug the backed code using dlv.
-In order to debug the code.
-1. Compile the backend code with debug options.
-```BASH 
-mage -v debugger
-```
-2. Restart grafana server
-```BASH 
-systemctl restart grafana-server
-```
-3. Get the pid of the plugin process 
-```BASH 
-pgrep vertica
-```
-4. Use the pid from 3 step and use it in the below statement to start debugger
-```BASH 
-dlv attach <"pid from step 3"> --headless --listen=:3222 --api-version 2 --log
-```
-5. Now you can use the vscode and debug option , configuration debugging is present in launch.json
-
 ## Development
 
 Prerequisite
- 1. Node JS 14+
- 2. Go version 1.14+
- 3. yarn
+ 1. Node.js 24
+ 2. Go 1.26.5
+ 3. Yarn 1.22.22
 
 Install
 ```BASH
-yarn install
+yarn install --frozen-lockfile
 ```
 Build
- 1. **Frontend** 
+ 1. **Frontend**
     ```BASH
     yarn build
-    ``` 
- 2. **Backend** mage -v
+    ```
+ 2. **Backend**
     ```BASH
-    mage -v
-    ``` 
+    go test ./...
+    go run github.com/magefile/mage@v1.15.0 -v buildAll
+    ```
 
-## Testing
- ```BASH
-sudo docker-compose up
-```
-This will run a local vertica and grafana instance.   
-A data source and data source will already be provisioned.
+## Legacy local Compose setup
 
+The checked-in `docker-compose.yml` is a legacy development aid. It uses
+mutable or legacy images and does not configure Grafana to load this unsigned
+plugin, so it is not suitable for release-candidate smoke testing.
 
-
+Test a release candidate only in a designated disposable Grafana and Vertica
+environment that allows the unsigned `rajsameer-vertica-datasource` plugin.
+Install the exact candidate ZIP there, then verify plugin loading, saved
+datasource configuration, health, representative table and time-series
+queries, and returned field and timestamp behavior.
