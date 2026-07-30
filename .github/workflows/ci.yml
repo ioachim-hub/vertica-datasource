@@ -7,69 +7,79 @@ on:
   pull_request:
     branches:
       - master
+
+permissions:
+  contents: read
+
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v2
-
-      - name: Setup Node.js environment
-        uses: actions/setup-node@v2.1.2
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          node-version: "14.x"
+          persist-credentials: false
 
-      - name: Get yarn cache directory path
-        id: yarn-cache-dir-path
-        run: echo "::set-output name=dir::$(yarn cache dir)"
-
-      - name: Cache yarn cache
-        uses: actions/cache@v2
-        id: cache-yarn-cache
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
+          node-version-file: .nvmrc
+          cache: yarn
 
-      - name: Cache node_modules
-        id: cache-node-modules
-        uses: actions/cache@v2
+      - name: Enable pinned Yarn
+        run: corepack enable
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          path: node_modules
-          key: ${{ runner.os }}-${{ matrix.node-version }}-nodemodules-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.node-version }}-nodemodules-
+          go-version: 1.26.5
+          cache: true
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Build and test frontend
+      - name: Lint frontend
+        run: yarn lint
+
+      - name: Type-check frontend
+        run: yarn typecheck
+
+      - name: Test frontend
+        run: yarn test:ci
+
+      - name: Build frontend
         run: yarn build
 
-      - name: Check for backend
-        id: check-for-backend
+      - name: Check backend formatting
         run: |
-          if [ -f "Magefile.go" ]
-          then
-            echo "::set-output name=has-backend::true"
+          unformatted="$(gofmt -l .)"
+          if [[ -n "$unformatted" ]]; then
+            echo "The following Go files are not formatted:" >&2
+            echo "$unformatted" >&2
+            exit 1
           fi
 
-      - name: Setup Go environment
-        if: steps.check-for-backend.outputs.has-backend == 'true'
-        uses: actions/setup-go@v2
-        with:
-          go-version: "1.16"
+      - name: Vet backend
+        run: go vet ./...
 
-      - name: Test backend
-        if: steps.check-for-backend.outputs.has-backend == 'true'
-        uses: magefile/mage-action@v1
-        with:
-          version: latest
-          args: coverage
+      - name: Test backend with race detector
+        run: go test -race ./...
 
-      - name: Build backend
-        if: steps.check-for-backend.outputs.has-backend == 'true'
-        uses: magefile/mage-action@v1
-        with:
-          version: latest
-          args: buildAll
+      - name: Build backend targets
+        run: go run github.com/magefile/mage@v1.15.0 -v buildAll
+
+      - name: Scan backend dependencies
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+
+      - name: Validate assembled plugin metadata
+        run: bash scripts/check-plugin-metadata.sh dist/plugin.json
+
+      - name: Package plugin for validation
+        run: bash scripts/package-plugin.sh "$(jq -r .version package.json)"
+
+      - name: Run Grafana plugin validator
+        run: |
+          version="$(jq -r .version package.json)"
+          go run github.com/grafana/plugin-validator/pkg/cmd/plugincheck2@v0.41.0 \
+            "release/rajsameer-vertica-datasource-$version.zip"

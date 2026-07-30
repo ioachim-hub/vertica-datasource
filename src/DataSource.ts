@@ -11,7 +11,7 @@ import {
 } from '@grafana/data';
 import { DataSourceWithBackend, getTemplateSrv } from '@grafana/runtime';
 import { VerticaDataSourceOptions, VerticaQuery, defaultQuery } from './types';
-import { Observable, Subscriber, merge } from 'rxjs';
+import { merge, Observable, Subscriber } from 'rxjs';
 import { defaults } from 'lodash';
 import { switchMap as switchMap$ } from 'rxjs/operators';
 
@@ -48,6 +48,10 @@ export class DataSource extends DataSourceWithBackend<VerticaQuery, VerticaDataS
         ],
       } as any)
       .toPromise();
+
+    if (response === undefined) {
+      return findVal;
+    }
 
     if (response.error) {
       throw new Error(response.error.message);
@@ -169,7 +173,7 @@ export class DataSource extends DataSourceWithBackend<VerticaQuery, VerticaDataS
      *Values is the variable that holds the data
      */
     const values: any[] = [],
-      data: DataFrame = await this.query({
+      data: DataFrame | undefined = await this.query({
         targets: [
           {
             queryString: target.queryString,
@@ -206,7 +210,6 @@ export class DataSource extends DataSourceWithBackend<VerticaQuery, VerticaDataS
             config: f.config,
             display: f.display,
             labels: f.labels,
-            parse: f.parse,
             state: f.state,
           });
         } else {

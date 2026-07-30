@@ -285,7 +285,6 @@ export class ConfigEditor extends PureComponent<Props, State> {
                 value={jsonData.usePreparedStatement}
                 disabled={false}
                 onChange={this.onPreparedStatementChange}
-                css={{ marginBottom: 'auto', marginTop: 'auto' }}
               />
             </Field>
           </div>
@@ -300,7 +299,6 @@ export class ConfigEditor extends PureComponent<Props, State> {
                 value={jsonData.useConnectionLoadbalancing}
                 disabled={false}
                 onChange={this.onConnectionLoadbalancingChange}
-                css={{ marginBottom: 'auto', marginTop: 'auto' }}
               />
             </Field>
           </div>

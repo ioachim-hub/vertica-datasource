@@ -1,164 +1,206 @@
 name: Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic version to package without the leading v
+        required: false
+        default: 2.0.9
+        type: string
   push:
     tags:
-      - "v*.*.*" # Run workflow on version tags, e.g. v1.0.0.
+      - "v*"
+
+permissions:
+  contents: read
 
 jobs:
   release:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
-
-      - name: Setup Node.js environment
-        uses: actions/setup-node@v2.1.2
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          node-version: "14.x"
+          persist-credentials: false
 
-      - name: Setup Go environment
-        uses: actions/setup-go@v2
+      - name: Resolve release version
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            release_version="${GITHUB_REF_NAME#v}"
+          else
+            release_version="${DISPATCH_VERSION:-2.0.9}"
+          fi
+          bash scripts/check-semver.sh "$release_version"
+          echo "RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          go-version: "1.16"
+          node-version-file: .nvmrc
+          cache: yarn
 
-      - name: Get yarn cache directory path
-        id: yarn-cache-dir-path
-        run: echo "::set-output name=dir::$(yarn cache dir)"
+      - name: Enable pinned Yarn
+        run: corepack enable
 
-      - name: Cache yarn cache
-        uses: actions/cache@v2
-        id: cache-yarn-cache
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
+          go-version: 1.26.5
+          cache: true
 
-      - name: Cache node_modules
-        id: cache-node-modules
-        uses: actions/cache@v2
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-${{ matrix.node-version }}-nodemodules-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.node-version }}-nodemodules-
+      - name: Install frontend dependencies
+        run: yarn install --frozen-lockfile
 
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile;
-        if: |
-          steps.cache-yarn-cache.outputs.cache-hit != 'true' ||
-          steps.cache-node-modules.outputs.cache-hit != 'true'
+      - name: Lint frontend
+        run: yarn lint
 
-      - name: Build and test frontend
+      - name: Type-check frontend
+        run: yarn typecheck
+
+      - name: Test frontend
+        run: yarn test:ci
+
+      - name: Build frontend
         run: yarn build
 
-      - name: Check for backend
-        id: check-for-backend
+      - name: Check backend formatting
         run: |
-          if [ -f "Magefile.go" ]
-          then
-            echo "::set-output name=has-backend::true"
+          unformatted="$(gofmt -l .)"
+          if [[ -n "$unformatted" ]]; then
+            echo "The following Go files are not formatted:" >&2
+            echo "$unformatted" >&2
+            exit 1
           fi
 
-      - name: Test backend
-        if: steps.check-for-backend.outputs.has-backend == 'true'
-        uses: magefile/mage-action@v1
-        with:
-          version: latest
-          args: coverage
+      - name: Vet backend
+        run: go vet ./...
 
-      - name: Build backend
-        if: steps.check-for-backend.outputs.has-backend == 'true'
-        uses: magefile/mage-action@v1
-        with:
-          version: latest
-          args: buildAll
+      - name: Test backend with race detector
+        run: go test -race ./...
 
-      - name: Sign plugin
-        run: yarn sign
-        env:
-          GRAFANA_API_KEY: ${{ secrets.GRAFANA_API_KEY }} # Requires a Grafana API key from Grafana.com.
+      - name: Build backend targets
+        run: go run github.com/magefile/mage@v1.15.0 -v buildAll
 
-      - name: Get plugin metadata
-        id: metadata
-        run: |
-          sudo apt-get install jq
+      - name: Scan backend dependencies
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 
-          export GRAFANA_PLUGIN_ID=$(cat dist/plugin.json | jq -r .id)
-          export GRAFANA_PLUGIN_VERSION=$(cat dist/plugin.json | jq -r .info.version)
-          export GRAFANA_PLUGIN_TYPE=$(cat dist/plugin.json | jq -r .type)
-          export GRAFANA_PLUGIN_ARTIFACT=${GRAFANA_PLUGIN_ID}-${GRAFANA_PLUGIN_VERSION}.zip
-          export GRAFANA_PLUGIN_ARTIFACT_CHECKSUM=${GRAFANA_PLUGIN_ARTIFACT}.md5
-
-          echo "::set-output name=plugin-id::${GRAFANA_PLUGIN_ID}"
-          echo "::set-output name=plugin-version::${GRAFANA_PLUGIN_VERSION}"
-          echo "::set-output name=plugin-type::${GRAFANA_PLUGIN_TYPE}"
-          echo "::set-output name=archive::${GRAFANA_PLUGIN_ARTIFACT}"
-          echo "::set-output name=archive-checksum::${GRAFANA_PLUGIN_ARTIFACT_CHECKSUM}"
-
-          echo ::set-output name=github-tag::${GITHUB_REF#refs/*/}
-
-      - name: Read changelog
-        id: changelog
-        run: |
-          awk '/^## / {s++} s == 1 {print}' CHANGELOG.md > release_notes.md
-          echo "::set-output name=path::release_notes.md"
+      - name: Validate assembled plugin metadata
+        run: bash scripts/check-plugin-metadata.sh dist/plugin.json
 
       - name: Check package version
-        run: if [ "v${{ steps.metadata.outputs.plugin-version }}" != "${{ steps.metadata.outputs.github-tag }}" ]; then printf "\033[0;31mPlugin version doesn't match tag name\033[0m\n"; exit 1; fi
+        run: bash scripts/check-version.sh "$RELEASE_VERSION"
+
+      - name: Extract matching release notes
+        run: |
+          changelog_version="${RELEASE_VERSION#v}"
+          awk -v version="$changelog_version" '
+            /^##[[:space:]]+/ {
+              if (found) {
+                exit
+              }
+              heading = $0
+              sub(/^##[[:space:]]+/, "", heading)
+              sub(/[[:space:]].*$/, "", heading)
+              sub(/^\[/, "", heading)
+              sub(/\]$/, "", heading)
+              sub(/^v/, "", heading)
+              if (heading == version) {
+                found = 1
+                print
+              }
+              next
+            }
+            found {
+              print
+            }
+            END {
+              if (!found) {
+                printf "CHANGELOG.md has no section for %s\n", version > "/dev/stderr"
+                exit 1
+              }
+            }
+          ' CHANGELOG.md > release-notes.md
 
       - name: Package plugin
-        id: package-plugin
+        run: bash scripts/package-plugin.sh "$RELEASE_VERSION"
+
+      - name: Verify release artifacts
         run: |
-          mv dist ${{ steps.metadata.outputs.plugin-id }}
-          zip ${{ steps.metadata.outputs.archive }} ${{ steps.metadata.outputs.plugin-id }} -r
-          md5sum ${{ steps.metadata.outputs.archive }} > ${{ steps.metadata.outputs.archive-checksum }}
-          echo "::set-output name=checksum::$(cat ./${{ steps.metadata.outputs.archive-checksum }} | cut -d' ' -f1)"
+          version="${RELEASE_VERSION#v}"
+          plugin_id="rajsameer-vertica-datasource"
+          archive="$plugin_id-$version.zip"
+          (
+            cd release
+            sha256sum -c "$archive.sha256"
+            unzip -t "$archive"
+          )
+          entries="$(unzip -Z1 "release/$archive")"
+          printf '%s\n' "$entries" | awk -F/ -v plugin_id="$plugin_id" '
+            BEGIN {
+              valid = 1
+            }
+            $1 != plugin_id {
+              valid = 0
+            }
+            END {
+              exit !(NR > 0 && valid != 0)
+            }
+          '
+          printf '%s\n' "$entries" | grep -Fx "$plugin_id/plugin.json" >/dev/null
+          printf '%s\n' "$entries" | grep -Fx "$plugin_id/module.js" >/dev/null
+          zipinfo -l "release/$archive" | awk -v plugin_id="$plugin_id" '
+            $NF ~ ("^" plugin_id "/gpx_vertica-datasource") {
+              count++
+              if ($1 !~ /^-rwxr-xr-x/) {
+                printf "Backend executable has unexpected mode: %s %s\n", $1, $NF > "/dev/stderr"
+                invalid = 1
+              }
+            }
+            END {
+              if (count != 6) {
+                printf "Expected 6 backend executables, found %d\n", count > "/dev/stderr"
+                invalid = 1
+              }
+              exit invalid
+            }
+          '
 
-      - name: Lint plugin
+      - name: Run Grafana plugin validator
         run: |
-          git clone https://github.com/grafana/plugin-validator
-          pushd ./plugin-validator/cmd/plugincheck
-          go install
-          popd
-          plugincheck ${{ steps.metadata.outputs.archive }}
+          version="${RELEASE_VERSION#v}"
+          go run github.com/grafana/plugin-validator/pkg/cmd/plugincheck2@v0.41.0 \
+            "release/rajsameer-vertica-datasource-$version.zip"
 
-      - name: Create release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          body_path: ${{ steps.changelog.outputs.path }}
-          draft: true
+          name: plugin-release
+          path: |
+            release/*
+            release-notes.md
+          if-no-files-found: error
 
-      - name: Add plugin to release
-        id: upload-plugin-asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download verified release artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./${{ steps.metadata.outputs.archive }}
-          asset_name: ${{ steps.metadata.outputs.archive }}
-          asset_content_type: application/zip
+          name: plugin-release
 
-      - name: Add checksum to release
-        id: upload-checksum-asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./${{ steps.metadata.outputs.archive-checksum }}
-          asset_name: ${{ steps.metadata.outputs.archive-checksum }}
-          asset_content_type: text/plain
-
-      - name: Publish to Grafana.com
-        run: |
-          echo A draft release has been created for your plugin. Please review and publish it. Then submit your plugin to grafana.com/plugins by opening a PR to https://github.com/grafana/grafana-plugin-repository with the following entry:
-          echo
-          echo '{ "id": "${{ steps.metadata.outputs.plugin-id }}", "type": "${{ steps.metadata.outputs.plugin-type }}", "url": "https://github.com/${{ github.repository }}", "versions": [ { "version": "${{ steps.metadata.outputs.plugin-version }}", "commit": "${{ github.sha }}", "url": "https://github.com/${{ github.repository }}", "download": { "any": { "url": "https://github.com/${{ github.repository }}/releases/download/v${{ steps.metadata.outputs.plugin-version }}/${{ steps.metadata.outputs.archive }}", "md5": "${{ steps.package-plugin.outputs.checksum }}" } } } ] }' | jq .
+          files: release/*
+          body_path: release-notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
