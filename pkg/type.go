@@ -2,8 +2,11 @@ package main
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 )
@@ -235,7 +238,7 @@ func generateRowIn(columnTypes []*sql.ColumnType) []interface{} {
 			rowIn = append(rowIn, &i)
 
 		case "VARBINARY":
-			var i string
+			var i []byte
 			rowIn = append(rowIn, &i)
 
 		case "UUID":
@@ -247,11 +250,11 @@ func generateRowIn(columnTypes []*sql.ColumnType) []interface{} {
 			rowIn = append(rowIn, &i)
 
 		case "LONG VARBINARY":
-			var i string
+			var i []byte
 			rowIn = append(rowIn, &i)
 
 		case "BINARY":
-			var i string
+			var i []byte
 			rowIn = append(rowIn, &i)
 
 		case "NUMERIC":
@@ -265,4 +268,23 @@ func generateRowIn(columnTypes []*sql.ColumnType) []interface{} {
 		}
 	}
 	return rowIn
+}
+
+func prepareRowForFrame(databaseTypes []string, scannedRow []interface{}) []interface{} {
+	row := make([]interface{}, len(scannedRow))
+	for i, value := range scannedRow {
+		switch databaseTypes[i] {
+		case "VARBINARY", "LONG VARBINARY", "BINARY":
+			encoded := hex.EncodeToString(*value.(*[]byte))
+			row[i] = &encoded
+		default:
+			if text, ok := value.(*string); ok && !utf8.ValidString(*text) {
+				validText := strings.ToValidUTF8(*text, "\uFFFD")
+				row[i] = &validText
+			} else {
+				row[i] = value
+			}
+		}
+	}
+	return row
 }

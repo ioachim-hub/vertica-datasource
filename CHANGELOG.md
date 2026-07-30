@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.0.10 (2026-07-30)
+
+### Fixed
+
+- Encode Vertica `BINARY`, `VARBINARY`, and `LONG VARBINARY` results as
+  hexadecimal strings so arbitrary bytes cannot break protobuf serialization.
+- Repair malformed UTF-8 in textual query results before returning Grafana data
+  frames.
+
+### Notes
+
+- The `v2.0.10` archive is unsigned for internal Grafana installations that
+  explicitly allow the plugin ID.
+
 ## 2.0.9 (2026-07-30)
 
 ### Changed

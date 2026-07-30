@@ -8,9 +8,9 @@ This plugin is a backend data source plugin.
 
 ### Maintained fork installation (recommended)
 
-The maintained `v2.0.9` archive is intentionally unsigned and is for internal
-deployment. Download `rajsameer-vertica-datasource-2.0.9.zip` and its `.sha256`
-file from this fork's `v2.0.9` GitHub release. Verify the checksum from the
+The maintained `v2.0.10` archive is intentionally unsigned and is for internal
+deployment. Download `rajsameer-vertica-datasource-2.0.10.zip` and its `.sha256`
+file from this fork's `v2.0.10` GitHub release. Verify the checksum from the
 download directory, then extract the ZIP into Grafana's plugin directory. In
 Grafana's configuration, allow this exact plugin ID:
 

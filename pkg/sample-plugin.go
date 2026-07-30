@@ -161,6 +161,10 @@ func (td *VerticaDatasource) query(ctx context.Context, query backend.DataQuery,
 		response.Error = err
 		return response
 	}
+	databaseTypes := make([]string, len(columnTypes))
+	for i, columnType := range columnTypes {
+		databaseTypes[i] = columnType.DatabaseTypeName()
+	}
 
 	//most of the SQL data source will return mostly a long frame, if group by is used.
 	//so by default a long frame will be created.
@@ -182,7 +186,7 @@ func (td *VerticaDatasource) query(ctx context.Context, query backend.DataQuery,
 		}
 
 		//append the scanned rows to the frame.
-		longFrame.AppendRow(rowIn...)
+		longFrame.AppendRow(prepareRowForFrame(databaseTypes, rowIn)...)
 
 	}
 	//will use the queryType parameter from query to format the time series
