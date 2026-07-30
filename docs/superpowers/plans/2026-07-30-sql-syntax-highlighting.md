@@ -4,14 +4,14 @@
 
 **Goal:** Activate the existing SQL token palette in the Grafana query editor and release it as version 2.0.11.
 
-**Architecture:** Keep CodeMirror's existing SQL parser, Grafana-aware surface theme, and token palette. Change the editor hook to install the already-composed `oneDark` extension, which contains both the surface theme and token highlighting, and cover the wiring with a rendered-editor regression test.
+**Architecture:** Keep CodeMirror's existing SQL parser, Grafana-aware surface theme, and token palette. Change the editor hook to install the already-composed `oneDark` extension, which contains both the surface theme and token highlighting, and pin the shared legacy language package so the parser and highlighter use the same syntax tree. Cover the result with a rendered-editor color regression test.
 
-**Tech Stack:** React 17, TypeScript, CodeMirror 6 prerelease packages, Jest, Grafana plugin Webpack tooling, GitHub Actions.
+**Tech Stack:** React 18, TypeScript, legacy CodeMirror 6 prerelease packages, Jest, Grafana plugin Webpack tooling, GitHub Actions.
 
 ## Global Constraints
 
 - Do not change autocomplete, formatting, SQL dialect, query execution, or editor layout.
-- Do not add or upgrade dependencies.
+- Pin direct dependency `@codemirror/language` to exactly `0.18.2`; do not add or upgrade other dependencies.
 - Keep backend code unchanged.
 - Release version is exactly `2.0.11`; the Git tag is exactly `v2.0.11`.
 - Preserve the user's existing dirty checkout by working only in `/tmp/vertica-datasource-sql-highlight`.
@@ -22,6 +22,7 @@
 
 - `src/UseCodeMirror.ts`: composes the SQL editor extensions and creates the editor.
 - `src/UseCodeMirror.test.tsx`: renders the real editor and verifies SQL tokens receive highlighting markup.
+- `yarn.lock`: makes the legacy parser and highlighter resolve one `@codemirror/language` instance.
 - `package.json`: declares the release version consumed by build and packaging scripts.
 - `CHANGELOG.md`: records the user-visible fix and unsigned internal-release note.
 
@@ -40,27 +41,31 @@
 - [ ] **Step 1: Write the failing rendered-editor test**
 
 ```tsx
-import React from 'react';
-import { act } from 'react-dom/test-utils';
-import ReactDOM from 'react-dom';
+import React, { act } from 'react';
+import { createRoot, Root } from 'react-dom/client';
+
 import { CodeMirror } from './CodeMirror';
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe('CodeMirror SQL highlighting', () => {
   let container: HTMLDivElement;
+  let root: Root;
 
   beforeEach(() => {
     container = document.createElement('div');
     document.body.appendChild(container);
+    root = createRoot(container);
   });
 
   afterEach(() => {
-    act(() => ReactDOM.unmountComponentAtNode(container));
+    act(() => root.unmount());
     container.remove();
   });
 
   it('adds highlighting markup to SQL keywords', () => {
     act(() => {
-      ReactDOM.render(<CodeMirror content="SELECT 1" onContentChange={() => undefined} />, container);
+      root.render(<CodeMirror content="SELECT 1" onContentChange={() => undefined} />);
     });
 
     const selectToken = Array.from(container.querySelectorAll('.cm-content span')).find(
@@ -68,7 +73,7 @@ describe('CodeMirror SQL highlighting', () => {
     );
 
     expect(selectToken).toBeDefined();
-    expect(selectToken?.className).not.toBe('');
+    expect(getComputedStyle(selectToken!).color).toBe('rgb(198, 120, 221)');
   });
 });
 ```
@@ -82,7 +87,8 @@ yarn test:ci src/UseCodeMirror.test.tsx
 ```
 
 Expected: FAIL because `SELECT` has no highlighted token span while only
-`oneDarkTheme` is installed.
+`oneDarkTheme` is installed and the parser/highlighter language instances
+differ.
 
 - [ ] **Step 3: Install the composed theme extension**
 
@@ -101,7 +107,15 @@ import { oneDark } from './theme';
 Then replace `oneDarkTheme` with `oneDark` in the `extensions` array passed to
 `EditorState.create`.
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [ ] **Step 4: Align the legacy language dependency**
+
+Add this direct dependency to `package.json`, then regenerate `yarn.lock`:
+
+```json
+"@codemirror/language": "0.18.2",
+```
+
+- [ ] **Step 5: Run the focused test and verify GREEN**
 
 Run:
 
@@ -111,7 +125,7 @@ yarn test:ci src/UseCodeMirror.test.tsx
 
 Expected: PASS with one suite and one test passing.
 
-- [ ] **Step 5: Run the complete frontend test suite**
+- [ ] **Step 6: Run the complete frontend test suite**
 
 Run:
 
@@ -122,10 +136,10 @@ yarn test:ci
 Expected: PASS with both `DataSource.test.ts` and
 `UseCodeMirror.test.tsx` passing.
 
-- [ ] **Step 6: Commit the behavior and regression test**
+- [ ] **Step 7: Commit the behavior and regression test**
 
 ```bash
-git add src/UseCodeMirror.ts src/UseCodeMirror.test.tsx
+git add src/UseCodeMirror.ts src/UseCodeMirror.test.tsx package.json yarn.lock
 git commit -m "fix(editor): enable SQL token colors"
 ```
 
@@ -226,8 +240,9 @@ git status --short
 ```
 
 Expected: every command exits 0; Git reports no uncommitted source changes.
-Backend tests remain unchanged and are left to hosted CI because the local Go
-dependency graph exceeds this environment's temporary-storage quota.
+Backend code remains unchanged; run Go vet, race tests, and multi-platform
+backend builds with `GOFLAGS=-buildvcs=false` because Go cannot derive VCS
+metadata from this out-of-tree linked worktree.
 
 - [ ] **Step 2: Push and open the pull request**
 
@@ -257,4 +272,3 @@ push that tag to `origin`. Do not tag the pre-merge feature-branch commit.
 Wait for the tag-triggered release workflow to complete. Confirm the published
 GitHub release is tagged `v2.0.11` and includes the
 `rajsameer-vertica-datasource-2.0.11.zip` archive plus checksum asset.
-

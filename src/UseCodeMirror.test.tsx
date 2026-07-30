@@ -30,6 +30,6 @@ describe('CodeMirror SQL highlighting', () => {
     );
 
     expect(selectToken).toBeDefined();
-    expect(selectToken?.className).not.toBe('');
+    expect(getComputedStyle(selectToken!).color).toBe('rgb(198, 120, 221)');
   });
 });
