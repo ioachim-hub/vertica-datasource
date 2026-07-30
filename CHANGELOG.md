@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.0.11 (2026-07-30)
+
+### Fixed
+
+- Apply the existing SQL syntax palette in the query editor so keywords,
+  strings, numbers, functions, operators, and comments are visually distinct.
+
+### Notes
+
+- The `v2.0.11` archive is unsigned for internal Grafana installations that
+  explicitly allow the plugin ID.
+
 ## 2.0.10 (2026-07-30)
 
 ### Fixed
