@@ -50,14 +50,14 @@ if ! (cd "$test_root/scripts" && bash ./check-version.sh "v$version"); then
 fi
 
 cp "$test_root/package.json" "$test_root/package.json.original"
-jq '.version = "2.0.10"' "$test_root/package.json.original" > "$test_root/package.json"
+jq '.version = "9.9.9"' "$test_root/package.json.original" > "$test_root/package.json"
 if bash "$test_root/scripts/check-version.sh" "$version"; then
   fail "check-version.sh accepted a package version mismatch"
 fi
 mv "$test_root/package.json.original" "$test_root/package.json"
 
 cp "$test_root/dist/plugin.json" "$test_root/dist/plugin.json.original"
-jq '.info.version = "2.0.10"' "$test_root/dist/plugin.json.original" > "$test_root/dist/plugin.json"
+jq '.info.version = "9.9.9"' "$test_root/dist/plugin.json.original" > "$test_root/dist/plugin.json"
 if bash "$test_root/scripts/check-version.sh" "$version"; then
   fail "check-version.sh accepted a manifest version mismatch"
 fi

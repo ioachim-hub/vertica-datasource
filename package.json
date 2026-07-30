@@ -1,6 +1,6 @@
 {
   "name": "rajsameer-vertica-datasource",
-  "version": "2.0.9",
+  "version": "2.0.10",
   "description": "vertica grafana data source sql",
   "scripts": {
     "build": "webpack --config .config/webpack/webpack.config.ts --env production",
