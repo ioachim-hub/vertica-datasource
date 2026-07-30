@@ -518,7 +518,7 @@
     "@codemirror/state" "^0.18.0"
     lezer "^0.13.0"
 
-"@codemirror/language@^0.18.0":
+"@codemirror/language@0.18.2", "@codemirror/language@^0.18.0":
   version "0.18.2"
   resolved "https://registry.yarnpkg.com/@codemirror/language/-/language-0.18.2.tgz#92b0e2ba0debfa8473d805efdabda5c24376cb16"
   integrity sha512-2Kz0Xyfvt1Ex2KfTUcYZ3IBxpnFCqHaJijwZknGBT7JXv9dwbOPs9SfPfL4oxVuDIHZx8JTPfoV3LTTJrm8M3Q==

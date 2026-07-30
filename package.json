@@ -1,6 +1,6 @@
 {
   "name": "rajsameer-vertica-datasource",
-  "version": "2.0.10",
+  "version": "2.0.11",
   "description": "vertica grafana data source sql",
   "scripts": {
     "build": "webpack --config .config/webpack/webpack.config.ts --env production",
@@ -69,6 +69,7 @@
     "@codemirror/basic-setup": "^0.18.2",
     "@codemirror/commands": "^0.18.3",
     "@codemirror/lang-sql": "^0.18.0",
+    "@codemirror/language": "0.18.2",
     "@codemirror/state": "^0.18.7",
     "@codemirror/view": "^0.18.17",
     "emotion": "^11.0.0",
