@@ -3,7 +3,7 @@ import { defaultTabBinding } from '@codemirror/commands';
 import { EditorView, keymap } from '@codemirror/view';
 import { RefObject, useEffect, useMemo, useRef } from 'react';
 import { sql, PostgreSQL, SQLConfig } from '@codemirror/lang-sql';
-import { oneDarkTheme } from './theme';
+import { oneDark } from './theme';
 
 interface UseCodeMirrorParams {
   content: string;
@@ -54,7 +54,7 @@ export function useCodeMirror({ content, onContentChange }: UseCodeMirrorParams)
     editorViewRef.current = new EditorView({
       state: EditorState.create({
         doc: content,
-        extensions: [basicSetup, keymap.of([defaultTabBinding]), updateListener, sql(sqlConfig), oneDarkTheme],
+        extensions: [basicSetup, keymap.of([defaultTabBinding]), updateListener, sql(sqlConfig), oneDark],
       }),
       parent: editorElementRef.current,
     });
