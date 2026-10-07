@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.0.12 (2026-10-07)
+
+### Security
+
+- Build with Go 1.26.8 to fix standard library vulnerabilities GO-2026-6090
+  (`crypto/tls`) and GO-2026-5972 (`encoding/asn1`).
+- Bump `google.golang.org/grpc` to v1.83.2 to fix GO-2026-6443 and
+  GO-2026-6348.
+- Bump OpenTelemetry modules to v1.47.0 to fix GO-2026-6505.
+- Bump `grafana-plugin-sdk-go` to v0.296.5 and refresh other Go dependencies.
+
+### Notes
+
+- The `v2.0.12` archive is unsigned for internal Grafana installations that
+  explicitly allow the plugin ID.
+
 ## 2.0.11 (2026-07-30)
 
 ### Fixed
