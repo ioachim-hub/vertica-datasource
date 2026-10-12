@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.0.13 (2026-10-12)
+
+### Security
+
+- Build all six backend targets with Go 1.26.9 to include the October 8
+  standard library and toolchain security fixes.
+- Upgrade `golang.org/x/net` to v0.60.0 to fix the reported HTTP/2
+  flow-control, SETTINGS, response-header, trailer, and HPACK vulnerabilities.
+
+### Notes
+
+- The `v2.0.13` archive is unsigned for internal Grafana installations that
+  explicitly allow the plugin ID.
+
 ## 2.0.12 (2026-10-07)
 
 ### Security
