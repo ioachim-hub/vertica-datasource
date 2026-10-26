@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.0.14 (2026-10-26)
+
+### Fixed
+
+- Preserve SQL NULL values when scanning text, numeric, boolean, and timestamp
+  columns instead of failing the query with a SQL scan error.
+- Preserve NULL binary values separately from empty binary values while retaining
+  hexadecimal encoding and UTF-8 repair for non-null results.
+
+### Notes
+
+- The `v2.0.14` archive is unsigned for internal Grafana installations that
+  explicitly allow the plugin ID.
+
 ## 2.0.13 (2026-10-12)
 
 ### Security

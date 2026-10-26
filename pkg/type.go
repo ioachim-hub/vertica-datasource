@@ -143,128 +143,36 @@ func generateFrameType(columnTypes []*sql.ColumnType) []data.FieldType {
 
 func generateRowIn(columnTypes []*sql.ColumnType) []interface{} {
 	rowIn := make([]interface{}, 0)
-	for _, colT := range columnTypes {
-		switch colT.DatabaseTypeName() {
-		case "BOOL":
-			var i bool
+	for _, fieldType := range generateFrameType(columnTypes) {
+		// database/sql accepts **T: SQL NULL leaves *T nil, other values allocate T.
+		switch fieldType {
+		case data.FieldTypeNullableBool:
+			var i *bool
 			rowIn = append(rowIn, &i)
 
-		case "INT":
-			var i int64
+		case data.FieldTypeNullableInt64:
+			var i *int64
 			rowIn = append(rowIn, &i)
 
-		case "FLOAT":
-			var i float64
+		case data.FieldTypeNullableFloat64:
+			var i *float64
 			rowIn = append(rowIn, &i)
 
-		case "CHAR":
-			var i string
+		case data.FieldTypeNullableString:
+			var i *string
 			rowIn = append(rowIn, &i)
 
-		case "VARCHAR":
-			var i string
+		case data.FieldTypeNullableTime:
+			var i *time.Time
 			rowIn = append(rowIn, &i)
-
-		case "DATE":
-			var i time.Time
-			rowIn = append(rowIn, &i)
-
-		case "TIMESTAMP":
-			var i time.Time
-			rowIn = append(rowIn, &i)
-
-		case "TIMESTAMPTZ":
-			var i time.Time
-			rowIn = append(rowIn, &i)
-
-		case "INTERVAL DAY":
-			var i string
-			rowIn = append(rowIn, &i)
-
-		case "INTERVAL DAY TO SECOND":
-			var i string
-			rowIn = append(rowIn, &i)
-
-		case "INTERVAL HOUR":
-			var i string
-			rowIn = append(rowIn, &i)
-
-		case "INTERVAL HOUR TO MINUTE":
-			var i string
-			rowIn = append(rowIn, &i)
-
-		case "INTERVAL HOUR TO SECOND":
-			var i string
-			rowIn = append(rowIn, &i)
-
-		case "INTERVAL MINUTE":
-			var i string
-			rowIn = append(rowIn, &i)
-
-		case "INTERVAL MINUTE TO SECOND":
-			var i string
-			rowIn = append(rowIn, &i)
-
-		case "INTERVAL SECOND":
-			var i string
-			rowIn = append(rowIn, &i)
-
-		case "INTERVAL DAY TO HOUR":
-			var i string
-			rowIn = append(rowIn, &i)
-
-		case "INTERVAL DAY TO MINUTE":
-			var i string
-			rowIn = append(rowIn, &i)
-
-		case "INTERVAL YEAR":
-			var i string
-			rowIn = append(rowIn, &i)
-
-		case "INTERVAL YEAR TO MONTH":
-			var i string
-			rowIn = append(rowIn, &i)
-
-		case "INTERVAL MONTH":
-			var i string
-			rowIn = append(rowIn, &i)
-
-		case "TIME":
-			var i time.Time
-			rowIn = append(rowIn, &i)
-
-		case "TIMETZ":
-			var i time.Time
-			rowIn = append(rowIn, &i)
-
-		case "VARBINARY":
-			var i []byte
-			rowIn = append(rowIn, &i)
-
-		case "UUID":
-			var i string
-			rowIn = append(rowIn, &i)
-
-		case "LONG VARCHAR":
-			var i string
-			rowIn = append(rowIn, &i)
-
-		case "LONG VARBINARY":
-			var i []byte
-			rowIn = append(rowIn, &i)
-
-		case "BINARY":
-			var i []byte
-			rowIn = append(rowIn, &i)
-
-		case "NUMERIC":
-			var i float64
-			rowIn = append(rowIn, &i)
-
-		default:
-			var i string
-			rowIn = append(rowIn, &i)
-
+		}
+	}
+	// Binary fields are represented as strings in Grafana, but scanned as bytes.
+	for i, col := range columnTypes {
+		switch col.DatabaseTypeName() {
+		case "VARBINARY", "LONG VARBINARY", "BINARY":
+			var raw []byte
+			rowIn[i] = &raw
 		}
 	}
 	return rowIn
@@ -273,12 +181,30 @@ func generateRowIn(columnTypes []*sql.ColumnType) []interface{} {
 func prepareRowForFrame(databaseTypes []string, scannedRow []interface{}) []interface{} {
 	row := make([]interface{}, len(scannedRow))
 	for i, value := range scannedRow {
+		// Unwrap the nullable scan destination into Grafana's nullable field value.
+		switch v := value.(type) {
+		case **bool:
+			value = *v
+		case **int64:
+			value = *v
+		case **float64:
+			value = *v
+		case **string:
+			value = *v
+		case **time.Time:
+			value = *v
+		}
 		switch databaseTypes[i] {
 		case "VARBINARY", "LONG VARBINARY", "BINARY":
-			encoded := hex.EncodeToString(*value.(*[]byte))
-			row[i] = &encoded
+			raw := *value.(*[]byte)
+			if raw == nil {
+				row[i] = (*string)(nil)
+			} else {
+				encoded := hex.EncodeToString(raw)
+				row[i] = &encoded
+			}
 		default:
-			if text, ok := value.(*string); ok && !utf8.ValidString(*text) {
+			if text, ok := value.(*string); ok && text != nil && !utf8.ValidString(*text) {
 				validText := strings.ToValidUTF8(*text, "\uFFFD")
 				row[i] = &validText
 			} else {
