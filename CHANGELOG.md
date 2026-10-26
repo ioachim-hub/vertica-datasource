@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.0.15 (2026-10-26)
+
+### Fixed
+
+- Include the SQL NULL scanning fix from 2.0.14, whose release was blocked
+  by the security scan before any artifacts were published.
+
+### Security
+
+- Build with Go 1.26.10 to fix GO-2026-6809 in certificate validation.
+
+### Notes
+
+- The `v2.0.15` archive is unsigned for internal Grafana installations that
+  explicitly allow the plugin ID.
+
 ## 2.0.14 (2026-10-26)
 
 ### Fixed
