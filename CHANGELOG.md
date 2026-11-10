@@ -1,11 +1,12 @@
 # Changelog
 
-## 2.0.16 (2026-10-28)
+## 2.0.16 (2026-11-10)
 
 ### Security
 
 - Upgrade `golang.org/x/net` to v0.62.0 to fix CVE-2026-97045 (GO-2026-6866)
   and CVE-2026-78661 (GO-2026-6860) in the HTML parser.
+- Upgrade `github.com/klauspost/compress` to v1.20.2 to fix GO-2026-6865.
 
 ### Notes
 
