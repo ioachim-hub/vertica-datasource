@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.17 (2026-11-17)
+
+### Security
+
+- Build with Go 1.26.11 to fix CVE-2026-97054 (GO-2026-6859), an HTTP/1 server
+  crash from a `net/http` MaxBytesReader header race.
+
 ## 2.0.16 (2026-11-10)
 
 ### Security
